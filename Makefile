@@ -35,12 +35,20 @@ CPPOBJ=$(CPPSRC:$(SRC)/%.cpp=$(OBJ)/%.o)
 CPPEXE=$(CPPSRC:$(SRC)/%.cpp=$(BIN)/%)
 DICT=$(OBJ)/Dict.o
 
+
 # Set default target
-all: $(INC)/AllSelectors.h $(CPPEXE)
+all: $(BIN) $(OBJ) $(INC)/AllSelectors.h $(CPPEXE)
+
+
+# Create bin/ and obj/
+$(BIN):
+	@mkdir -p $(BIN)
+$(OBJ):
+	@mkdir -p $(OBJ)
 
 
 # Dictionary
-$(DICT): $(SRC)/Dict.cxx
+$(OBJ)/Dict.o: $(SRC)/Dict.cxx
 	@echo " "
 	@echo "------>>>>>> Compiling $<"
 	$(GCC) $(COPT) -c $< -o $@
