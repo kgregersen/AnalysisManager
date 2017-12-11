@@ -1,0 +1,235 @@
+// Dear emacs, this is -*- c++ -*-
+#ifndef SELECTORBASE_ICC
+#define SELECTORBASE_ICC
+
+// Standard Template Library includes
+#include <utility>
+#include <map>
+#include <typeinfo>
+
+// ROOT includes
+#include <TTree.h>
+#include <TBranch.h>
+#include <TBranchElement.h>
+#include <TLeaf.h>
+
+// Analysis includes
+#include "Service.h"
+
+
+template< typename T>
+void SelectorBase::SetAddress(TBranch* branch, T*& _addr) {
+
+  // reset pointer
+  _addr = 0;
+
+  // check if variable is a simple type (int, float, ...)
+  if ( strlen(typeid(T).name()) == 1 ) {
+
+    // variable is simple type
+    // check if variable type matches branch type
+    if ( ! strcmp(typeid(T).name(),TypeidType(branch->GetLeaf((static_cast<TBranchElement*>(branch))->GetName())->GetTypeName())) ) {
+
+      // varable type matches branch type - set address (re-bind)
+      _addr = static_cast<T*>(static_cast<void*>(branch->GetAddress()));
+
+    }
+    else {
+
+      // variable type does not match branch type!
+      m_log << Log::ERROR << "The branch \"" << static_cast<TBranchElement*>(branch)->GetName() << "\" expects type " \
+	    << TypeidType(branch->GetLeaf(static_cast<TBranchElement*>(branch)->GetName())->GetTypeName()) \
+	    << " - but declared type is " << typeid(T).name() << Log::endl();
+
+    }
+
+  }
+  else {
+
+    // variable is non-simple type (e.g. std::vector)
+    // check if variable type matches branch type
+    if ( ! strcmp(TClass::GetClass(typeid(T))->GetName(), branch->GetClassName()) ) {
+
+      // varable type matches branch type - set address (re-bind)
+      _addr = static_cast<T*>( *(reinterpret_cast<void**>(branch->GetAddress())) );
+
+    }
+    else {
+
+      // variable type does not match branch type!
+      m_log << Log::ERROR << "The branch " << static_cast<TBranchElement*>(branch)->GetName() << " expects type " \
+	    << branch->GetClassName() << " - but declared type is " << TClass::GetClass(typeid(T))->GetName() << Log::endl();
+      
+    }
+
+  }
+
+  // successful re-binding
+  if ( _addr ) m_log << Log::DEBUG << "Branch with name \"" << static_cast<TBranchElement*>(branch)->GetName() \
+		     << "\" already connected. Re-binding to same object, address = " << _addr << Log::endl();
+  
+}
+
+
+template< typename T>
+void SelectorBase::GetVariable(const char* _keyword, const T*& _addr, const int& isNewVar) {
+
+  // specialisation for const variable
+  GetVar(_keyword, const_cast<T*&>(_addr), isNewVar);
+
+}
+
+
+template< typename T>
+void SelectorBase::GetVariable(const char* _keyword, T*& _addr, const int& isNewVar) { 
+
+  // check if branch exists in input tree
+  if ( m_service.GetInTree()->GetBranch(_keyword) ) {
+
+    m_log << Log::DEBUG << "Branch with name \"" << _keyword << "\" exists in input tree." << Log::endl();
+
+    // check if the user (wrongly) suggests this is a new variable (i.e. NOT in input tree)
+    if ( isNewVar == 1 ) {
+      m_log << Log::WARNING << "Branch with name \"" << _keyword		\
+	    << "\" ALREADY exists in input tree, BUT you have set 'isNewVar=1' in GetVariable()!" << Log::endl();
+    }
+
+    // check if another variable is already connected to branch in input tree
+    if ( m_service.GetInTree()->GetBranch(_keyword)->GetAddress() != 0 ) {
+      
+      // branch already connected (by another selector) - rebind the pointer to the existing location
+      SetAddress<T>(m_service.GetInTree()->GetBranch(_keyword),_addr);
+    
+    }
+    else {
+    
+      // branch in input tree is not connected yet - connect it to variable!
+      m_log << Log::DEBUG << "Connecting branch with name \"" << _keyword << "\" to input tree" << Log::endl();
+      
+      // check if variable is a simple type (int, float, ...)
+      if ( strlen(typeid(T).name()) == 1 ) { 
+
+	// this is a simple type - WE are responsible for handling the memory allocation
+
+	// check if the address of the pointer is already known (it shouldn't be!)
+	// if not, keep track of memory allocation.
+	// for each new input file, memory will be deallocated and the map cleared - in EndInputFile()
+	std::map<unsigned long,std::pair<void *,const char *> >::iterator iter = m_ptrs.find(reinterpret_cast<unsigned long>(&_addr));
+	if ( iter == m_ptrs.end() ) {
+	  _addr = new T();
+	  m_ptrs[ reinterpret_cast<unsigned long>(&_addr) ] = std::pair<void*, const char*>(static_cast<void*>(_addr),typeid(T).name());
+	}
+	else {
+	  m_log << Log::ERROR << "This is unexpected! Memory allocation at address = " << _addr 
+		<< " is ALREADY accounted for! Not safe to continue!" << Log::endl();
+	}
+
+	m_log << Log::DEBUG << "Variable is simple type," << (iter==m_ptrs.end() ? " " : " re-using ") \
+	      << "memory allocated at address = " << _addr << Log::endl();	
+
+	// connect variable to branch in input tree
+	m_service.ConnectVariable(_keyword,*_addr); 
+
+      }
+      else {
+	
+	// connect variable to branch in input tree
+	m_service.ConnectVariable(_keyword,_addr);
+
+	// this is a non-simple type (e.g. a std::vector) - ROOT takes responsibility for handling the memory allocation.
+	m_log << Log::DEBUG << "Variable is non-simple type, memory at address = " << _addr << Log::endl();
+
+      }
+
+      // now check if variable is already declared in output tree
+      if (m_service.GetOutTree()->GetBranch(_keyword)) {
+	
+	// variable is declared in output tree - we need to update branch address in output tree. 
+	// when opening new files, variables in input files get new addresses when connecting, so we must make sure 
+	// that the output branches are always up to date, since input tree and output tree are sharing the memory!
+	m_log << Log::DEBUG << "Updating branch address in output tree for branch with name \"" << _keyword << "\"" << Log::endl();
+	m_log << Log::DEBUG << "Old branch address of variable with name \"" << _keyword << "\" in output tree = " \
+	      << static_cast<T*>( static_cast<void*>( m_service.GetOutTree()->GetBranch(_keyword)->GetAddress() ) ) << Log::endl();
+
+	// update branch address in output tree
+	m_service.GetOutTree()->GetBranch(_keyword)->SetAddress( static_cast<T*>( static_cast<void*>(m_service.GetInTree()->GetBranch(_keyword)->GetAddress()) ) );
+
+	// print out debug-info
+	m_log << Log::DEBUG << "New branch address of variable with name \"" << _keyword << "\" in output tree = " \
+	      << static_cast<T*>( static_cast<void*>( m_service.GetOutTree()->GetBranch(_keyword)->GetAddress() ) ) << Log::endl();
+	m_log << Log::DEBUG << "Branch address of variable with name \"" << _keyword << "\" in input tree      = " \
+	      << static_cast<T*>( static_cast<void*>( m_service.GetInTree()->GetBranch(_keyword)->GetAddress() ) ) << Log::endl();
+	
+      }
+      else {
+
+	// variable is not declared in output tree - declare it!
+	m_service.DeclareVariable(_keyword,*_addr);
+	m_log << Log::DEBUG << "Branch with name \"" << _keyword << "\" connected to output tree" << Log::endl();
+
+      }
+
+    }
+
+  }
+  else {
+
+    // this variable is not in input tree - we assume that is an entirely new variable and declare it in the 
+    // output tree. If already declared, we rebind the pointer to the existing address.
+    m_log << Log::DEBUG << "Branch with name \"" << _keyword << "\" does not exist in input tree." << Log::endl();
+
+    // check if the user (wrongly) suggests this is not a new variable (i.e. that it IS in the input tree)
+    if (isNewVar==0) {
+      m_log << Log::WARNING << "Branch with name \"" << _keyword		\
+	    << "\" DOES NOT exist in input tree, BUT you have set 'isNewVar=0' in GetVariable()!" << Log::endl();
+    }
+
+    // check if variable exists in output tree
+    if ( m_service.GetOutTree()->GetBranch(_keyword) ) {
+
+      // varible already exists in output tree (declared by another selector).
+      // rebind the pointer to the existing location
+      SetAddress<T>(m_service.GetOutTree()->GetBranch(_keyword),_addr);
+
+    }
+    else {
+
+      // branch does not exist in output tree - declare it! 
+      // WE are responsible for handling the memory allocation.
+      // however, the variable will live until the program terminates so we won't bother book-keeping it.
+      _addr = new T();
+      
+      // check if variable is a simple type (int, float, ...)
+      if ( strlen(typeid(T).name()) == 1 ) {
+
+	// simple type - declare variable in output tree
+	m_service.DeclareVariable(_keyword,*_addr);
+
+      }
+      else {
+
+	// non-simple type - declare variable in output tree
+	m_service.DeclareVariable(_keyword,_addr);
+
+      }
+      
+      m_log << Log::DEBUG << "Branch with name \"" << _keyword << "\" and type = \"" \
+	    << (strlen(typeid(T).name())==1 ? typeid(T).name() : TClass::GetClass(typeid(T))->GetName()) \
+	    <<"\" declared in output tree. Memory allocated at address = " << _addr << Log::endl();
+    }
+
+  }
+
+  // check if output branch is ready
+  if ( ! (m_service.GetOutTree()->GetBranch(_keyword) && m_service.GetOutTree()->GetBranch(_keyword)->GetAddress() != 0) ) {
+
+    m_log << Log::ERROR << "Branch with name \"" << _keyword << "\" NOT connected to output tree" << Log::endl();
+    _addr = 0;
+
+  }
+
+}
+
+  
+#endif
+

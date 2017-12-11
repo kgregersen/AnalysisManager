@@ -1,0 +1,32 @@
+#-------------------------------------------------------------------------------#
+#                                                                               #
+#                                 I/O settings                                  #
+#                                                                               #
+#-------------------------------------------------------------------------------#
+
+string         outputNtupleFileName    = ntuple.root
+string         outputHistogramFileName = histograms.root
+string         inputTreeName           = tree
+vector<string> inputFileNames          = ExampleTree.root 
+
+
+#-------------------------------------------------------------------------------#
+#                                                                               #
+#                              Selector settings                                #
+#                                                                               #
+#-------------------------------------------------------------------------------#
+
+vector<string> selectors                = MySelector
+float          MySelector::my_float_min = 40
+int            MySelector::my_int_min   = 1
+
+
+#-------------------------------------------------------------------------------#
+#                                                                               #
+#                           Miscellaneous settings                              #
+#                                                                               #
+#-------------------------------------------------------------------------------#
+
+int            nEventsMax      = -1
+int            nEventsProgress = 10000
+string         loglevel        = debug

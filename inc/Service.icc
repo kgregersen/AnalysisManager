@@ -1,0 +1,48 @@
+// Dear emacs, this is -*- c++ -*-
+#ifndef __SERVICE_ICC__
+#define __SERVICE_ICC__
+
+// ROOT includes
+#include "TTree.h"
+
+
+template< typename T>
+void Service::ConnectVariable(const char* _keyword, T*& _addr) 
+{
+  // non-simple variables (vectors)
+  m_inTree->SetBranchStatus( _keyword, 1 );
+  m_inTree->SetBranchAddress( _keyword, &_addr );
+  
+}
+
+
+template< typename T>
+void Service::ConnectVariable(const char* _keyword, T& _addr) 
+{
+
+ // simple variables (int, float,...)
+  m_inTree->SetBranchStatus( _keyword, 1 );
+  m_inTree->SetBranchAddress( _keyword, &_addr);
+
+}
+
+
+template< typename T>
+void Service::DeclareVariable(const char* _keyword, T*& _addr)
+{
+
+ // non-simple variables (vectors)
+  m_outTree->Branch( _keyword , &_addr );
+
+}  
+
+template< typename T>
+void Service::DeclareVariable(const char* _keyword, T& _addr)
+{
+
+ // simple variables (int, float,...)
+  m_outTree->Branch( _keyword , &_addr );
+
+}  
+
+#endif
