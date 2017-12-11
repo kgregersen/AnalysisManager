@@ -69,8 +69,6 @@ private:
   // input files
   unsigned int m_counter;
   std::vector<TFile *> m_inFiles;
-  int m_numberOfEventsInitial;
-  float m_sumOfWeightsInitial;
   
   // total number of events
   long m_nEvents;

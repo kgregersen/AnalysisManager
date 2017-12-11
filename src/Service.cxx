@@ -13,8 +13,6 @@ Service::Service(const Log::LEVEL & logLevel) :
   m_inTree(0), 
   m_outTree(0),
   m_counter(0),
-  m_numberOfEventsInitial(0),
-  m_sumOfWeightsInitial(0.),
   m_nEvents(0),
   m_log("Service")
 {
