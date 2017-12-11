@@ -45,8 +45,8 @@ $(DICT): $(SRC)/Dict.cxx
 	@echo "------>>>>>> Compiling $<"
 	$(GCC) $(COPT) -c $< -o $@
 	@echo " "
-	@echo "------>>>>>> Moving $(SRC)/Dictrdict.pcm to $(BIN)/"
-	@mv $(SRC)/Dict_rdict.pcm $(BIN)/.
+	@echo "------>>>>>> Moving $(SRC)/Dict_rdict.pcm to $(BIN)/"
+	@mv -v $(SRC)/Dict_rdict.pcm $(BIN)/.
 $(SRC)/Dict.cxx: $(INC)/LinkDef.h
 	@echo " "
 	@echo "------>>>>>> Generating $@"
